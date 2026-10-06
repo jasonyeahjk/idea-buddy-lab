@@ -14,7 +14,7 @@ export const AGENT_LABELS: Record<AgentId, string> = {
 export const AGENT_READY: Record<AgentId, boolean> = {
   supervisor: true,
   inspiration: true,
-  creation: false,
+  creation: true,
   evaluation: false,
 };
 
@@ -35,6 +35,7 @@ export interface Blackboard {
   stage: Stage;
   ideas: string[];
   materials: string[];
+  steps: string[];
   safetyTips: string[];
   guidingQuestions: string[];
   knowledge: string[];
@@ -48,6 +49,7 @@ export const emptyBlackboard = (): Blackboard => ({
   stage: "灵感",
   ideas: [],
   materials: [],
+  steps: [],
   safetyTips: [],
   guidingQuestions: [],
   knowledge: [],
@@ -70,6 +72,7 @@ export interface BlackboardPatch {
   stage?: Stage | null;
   ideas?: string[];
   materials?: string[];
+  steps?: string[];
   safetyTips?: string[];
   guidingQuestions?: string[];
   knowledge?: string[];
@@ -85,6 +88,7 @@ export function applyPatch(bb: Blackboard, p: BlackboardPatch): Blackboard {
     stage: p.stage ?? bb.stage,
     ideas: uniq(bb.ideas, p.ideas),
     materials: uniq(bb.materials, p.materials),
+    steps: uniq(bb.steps, p.steps, 16),
     safetyTips: uniq(bb.safetyTips, p.safetyTips),
     guidingQuestions: p.guidingQuestions?.length ? p.guidingQuestions.slice(0, 5) : bb.guidingQuestions,
     knowledge: uniq(bb.knowledge, p.knowledge),
