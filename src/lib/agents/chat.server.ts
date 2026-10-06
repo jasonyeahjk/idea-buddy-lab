@@ -66,7 +66,7 @@ export async function handleChat(request: Request): Promise<Response> {
     .maybeSingle();
   if (sErr || !session) return json(404, "会话不存在");
 
-  const last = messages[messages.length - 1];
+  const last = messages[messages.length - 1]!;
   const userText = last.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
   const bbRef: { current: Blackboard } = { current: normalizeBlackboard(session.blackboard) };
   let agentUsed: AgentId = "supervisor";

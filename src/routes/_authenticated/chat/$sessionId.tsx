@@ -71,7 +71,7 @@ function ChatPage() {
 
   async function newSession() {
     const { data, error } = await supabase.from("sessions").insert({}).select("id").single();
-    if (error) return toast.error("创建会话失败");
+    if (error) { toast.error("创建会话失败"); return; }
     await qc.invalidateQueries({ queryKey: ["sessions"] });
     navigate({ to: "/chat/$sessionId", params: { sessionId: data.id } });
   }
