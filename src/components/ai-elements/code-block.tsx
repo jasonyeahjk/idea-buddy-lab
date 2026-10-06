@@ -529,8 +529,6 @@ export const CodeBlockLanguageSelectorTrigger = ({
       "h-7 border-none bg-transparent px-2 text-xs shadow-none",
       className
     )}
-    {/* @ts-expect-error size prop not in local select */}
-    size="sm"
     {...props}
   />
 );
