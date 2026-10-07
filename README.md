@@ -1,14 +1,19 @@
-# Welcome to your Lovable project
+# Creative Companion Hub
+
+创享智伴：基于多智能体协同的学生多元创作全流程伴学与循证评价平台
+先搭建 MAF 最小原型，实现共享状态黑板和 Supervisor 意图路由，再接入灵感探究智能体。
 
 This project was built with [Lovable](https://lovable.dev).
 
+**Live app**: https://idea-buddy-lab.lovable.app
+
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/f936f41e-260d-4544-80d3-0e0fcea5429c).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +25,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
