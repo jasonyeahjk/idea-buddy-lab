@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/chat/")({
+  staticData: { sitemap: false },
   beforeLoad: async () => {
     const { data } = await supabase.from("sessions").select("id").order("updated_at", { ascending: false }).limit(1);
     let id = data?.[0]?.id;

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/auth")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "登录 · 创享智伴" },
