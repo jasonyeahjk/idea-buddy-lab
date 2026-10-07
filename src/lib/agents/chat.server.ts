@@ -17,6 +17,8 @@ import {
 } from "./blackboard";
 import { createGateway } from "./gateway.server";
 import { runInspirationAgent } from "./inspiration.server";
+import { runCreationAgent } from "./creation.server";
+import { runEvaluationAgent } from "./evaluation.server";
 import { routeIntent } from "./supervisor.server";
 
 const json = (status: number, error: string) =>
@@ -98,8 +100,10 @@ export async function handleChat(request: Request): Promise<Response> {
       });
 
       // 2. Dispatch to the target agent
-      if (decision.agent === "inspiration" && AGENT_READY.inspiration) {
-        const result = runInspirationAgent(model, await convertToModelMessages(messages), bbRef, request.signal);
+      const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent } as const;
+      const runner = decision.agent !== "supervisor" && AGENT_READY[decision.agent] ? runners[decision.agent] : null;
+      if (runner) {
+        const result = runner(model, await convertToModelMessages(messages), bbRef, request.signal);
         writer.merge(result.toUIMessageStream({ sendStart: false, sendReasoning: true, onError: friendlyError }));
         await result.steps;
       } else {

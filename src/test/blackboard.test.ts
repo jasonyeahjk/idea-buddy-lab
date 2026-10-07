@@ -18,3 +18,12 @@ describe("blackboard patch", () => {
     expect(b.materials).toEqual(["红纸", "剪刀"]);
   });
 });
+
+describe("evaluation fields", () => {
+  it("replaces evaluation scores and appends resource tips", () => {
+    const a = applyPatch(emptyBlackboard(), { evaluation: ["创意表达：★★★"], resourceTips: ["边角料做书签"] });
+    const b = applyPatch(a, { evaluation: ["创意表达：★★★★"], resourceTips: ["剩余面团冷冻"] });
+    expect(b.evaluation).toEqual(["创意表达：★★★★"]);
+    expect(b.resourceTips).toEqual(["边角料做书签", "剩余面团冷冻"]);
+  });
+});

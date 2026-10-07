@@ -15,7 +15,7 @@ export const AGENT_READY: Record<AgentId, boolean> = {
   supervisor: true,
   inspiration: true,
   creation: true,
-  evaluation: false,
+  evaluation: true,
 };
 
 export type Stage = "灵感" | "准备" | "制作" | "装饰" | "分享" | "反思";
@@ -39,6 +39,9 @@ export interface Blackboard {
   safetyTips: string[];
   guidingQuestions: string[];
   knowledge: string[];
+  evaluation: string[];
+  reflections: string[];
+  resourceTips: string[];
   routeLog: RouteRecord[];
 }
 
@@ -53,6 +56,9 @@ export const emptyBlackboard = (): Blackboard => ({
   safetyTips: [],
   guidingQuestions: [],
   knowledge: [],
+  evaluation: [],
+  reflections: [],
+  resourceTips: [],
   routeLog: [],
 });
 
@@ -76,6 +82,9 @@ export interface BlackboardPatch {
   safetyTips?: string[];
   guidingQuestions?: string[];
   knowledge?: string[];
+  evaluation?: string[];
+  reflections?: string[];
+  resourceTips?: string[];
 }
 
 /** Merge a patch: scalar fields overwrite when provided, list fields append + dedupe. */
@@ -92,6 +101,9 @@ export function applyPatch(bb: Blackboard, p: BlackboardPatch): Blackboard {
     safetyTips: uniq(bb.safetyTips, p.safetyTips),
     guidingQuestions: p.guidingQuestions?.length ? p.guidingQuestions.slice(0, 5) : bb.guidingQuestions,
     knowledge: uniq(bb.knowledge, p.knowledge),
+    evaluation: p.evaluation?.length ? p.evaluation.slice(0, 6) : bb.evaluation,
+    reflections: p.reflections?.length ? p.reflections.slice(0, 5) : bb.reflections,
+    resourceTips: uniq(bb.resourceTips, p.resourceTips),
   };
 }
 

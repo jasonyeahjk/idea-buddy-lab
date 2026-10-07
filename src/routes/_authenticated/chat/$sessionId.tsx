@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen } from "lucide-react";
+import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AGENT_LABELS,
@@ -249,9 +249,13 @@ function BlackboardPanel({ bb }: { bb: Blackboard }) {
   const lists: { title: string; icon: typeof Lightbulb; items: string[] }[] = [
     { title: "灵感方向", icon: Lightbulb, items: bb.ideas },
     { title: "材料素材", icon: Package, items: bb.materials },
+    { title: "创作步骤", icon: ListChecks, items: bb.steps },
     { title: "安全提示", icon: ShieldAlert, items: bb.safetyTips },
     { title: "引导问题", icon: HelpCircle, items: bb.guidingQuestions },
     { title: "文化 / 营养知识", icon: BookOpen, items: bb.knowledge },
+    { title: "循证评价", icon: Star, items: bb.evaluation },
+    { title: "反思问题", icon: MessageCircleQuestion, items: bb.reflections },
+    { title: "成本与资源循环", icon: Recycle, items: bb.resourceTips },
   ];
   return (
     <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-4 lg:block">
