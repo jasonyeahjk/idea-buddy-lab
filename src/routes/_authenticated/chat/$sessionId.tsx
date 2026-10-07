@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/_authenticated/chat/$sessionId")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "创作会话 · 创享智伴" },

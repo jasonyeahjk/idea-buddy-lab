@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "创享智伴 · 多智能体协同的学生创作伴学平台" },
