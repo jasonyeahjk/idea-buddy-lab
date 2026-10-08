@@ -42,3 +42,36 @@ describe("diagrams", () => {
     expect(d.height).toBe(200);
   });
 });
+
+describe("english agent", () => {
+  it("routes english intent to the english agent", () => {
+    expect(agentForIntent("english")).toBe("english");
+  });
+  it("marks a topic mastered only after 2 evidence records", () => {
+    const a = applyPatch(emptyBlackboard(), { englishEvidence: [{ topicId: "v-colors", note: "red" }] });
+    expect(a.englishProgress["v-colors"]?.status).toBe("学习中");
+    const b = applyPatch(a, { englishEvidence: [{ topicId: "v-colors", note: "blue" }, { topicId: "nope", note: "x" }] });
+    expect(b.englishProgress["v-colors"]?.status).toBe("已掌握");
+    expect(b.englishProgress["nope"]).toBeUndefined();
+  });
+  it("dedupes vocab cards by word", () => {
+    const c = { word: "Flour", phonetic: "", meaning: "面粉", example: "" };
+    const b = applyPatch(applyPatch(emptyBlackboard(), { vocab: [c] }), { vocab: [{ ...c, word: "flour" }] });
+    expect(b.vocab).toHaveLength(1);
+  });
+  it("taxonomy prerequisites exist and form no cycle", async () => {
+    const { ENGLISH_TOPICS, TOPIC_BY_ID } = await import("@/lib/agents/english-taxonomy");
+    const state = new Map<string, number>();
+    const visit = (id: string): void => {
+      if (state.get(id) === 2) return;
+      if (state.get(id) === 1) throw new Error(`cycle at ${id}`);
+      state.set(id, 1);
+      for (const p of TOPIC_BY_ID.get(id)!.prerequisites) {
+        expect(TOPIC_BY_ID.has(p.id)).toBe(true);
+        visit(p.id);
+      }
+      state.set(id, 2);
+    };
+    ENGLISH_TOPICS.forEach((t) => visit(t.id));
+  });
+});
