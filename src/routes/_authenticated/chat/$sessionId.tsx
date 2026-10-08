@@ -4,7 +4,8 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler, Languages, GraduationCap, MoreHorizontal, Trash2 } from "lucide-react";
+import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler, Languages, GraduationCap, MoreHorizontal, Trash2, Menu, LayoutPanelLeft } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,21 +103,8 @@ function ChatPage() {
     }
   }
 
-  return (
-    <div className="flex h-screen bg-background">
-      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除「{toDelete?.title}」？</AlertDialogTitle>
-            <AlertDialogDescription>删除后该创作的对话和黑板记录都无法恢复。</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">删除</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
+  const sidebar = (
+    <>
         <Link to="/" className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="" className="h-8 w-8" />
           <span className="font-display text-lg font-semibold">创享智伴</span>
@@ -132,7 +120,7 @@ function ChatPage() {
               </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button aria-label="更多操作" className="mr-1 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100">
+                  <button aria-label="更多操作" className="mr-1 rounded p-1 text-muted-foreground hover:text-foreground md:opacity-0 md:group-hover:opacity-100 data-[state=open]:opacity-100">
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
@@ -151,20 +139,37 @@ function ChatPage() {
         >
           <LogOut className="h-4 w-4" />退出登录
         </button>
-      </aside>
+    </>
+  );
+
+  return (
+    <div className="flex h-[100dvh] bg-background">
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除「{toDelete?.title}」？</AlertDialogTitle>
+            <AlertDialogDescription>删除后该创作的对话和黑板记录都无法恢复。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">删除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">{sidebar}</aside>
 
       {detail.isLoading ? (
         <div className="flex flex-1 items-center justify-center"><Shimmer>正在打开会话…</Shimmer></div>
       ) : detail.error ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">会话加载失败</div>
       ) : (
-        <ChatWindow key={sessionId} sessionId={sessionId} initialMessages={detail.data!.messages} initialBlackboard={detail.data!.blackboard} />
+        <ChatWindow key={sessionId} sidebar={sidebar} sessionId={sessionId} initialMessages={detail.data!.messages} initialBlackboard={detail.data!.blackboard} />
       )}
     </div>
   );
 }
 
-function ChatWindow({ sessionId, initialMessages, initialBlackboard }: { sessionId: string; initialMessages: UIMessage[]; initialBlackboard: Blackboard }) {
+function ChatWindow({ sidebar, sessionId, initialMessages, initialBlackboard }: { sidebar: React.ReactNode; sessionId: string; initialMessages: UIMessage[]; initialBlackboard: Blackboard }) {
   const qc = useQueryClient();
   const [bb, setBb] = useState(initialBlackboard);
   const [input, setInput] = useState("");
@@ -205,6 +210,26 @@ function ChatWindow({ sessionId, initialMessages, initialBlackboard }: { session
   return (
     <>
       <main className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center justify-between border-b bg-card px-3 py-2 lg:hidden">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="md:invisible"><Menu className="mr-1 h-4 w-4" />创作清单</Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="flex w-72 flex-col bg-sidebar p-0">
+              <SheetTitle className="sr-only">创作清单</SheetTitle>
+              {sidebar}
+            </SheetContent>
+          </Sheet>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm"><LayoutPanelLeft className="mr-1 h-4 w-4" />共享黑板</Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[88vw] max-w-sm overflow-y-auto p-0">
+              <SheetTitle className="sr-only">共享状态黑板</SheetTitle>
+              <BlackboardPanel bb={bb} mobile />
+            </SheetContent>
+          </Sheet>
+        </div>
         <Conversation className="flex-1">
           <ConversationContent className="mx-auto w-full max-w-3xl">
             {messages.length === 0 ? (
@@ -317,7 +342,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
   );
 }
 
-function BlackboardPanel({ bb }: { bb: Blackboard }) {
+function BlackboardPanel({ bb, mobile }: { bb: Blackboard; mobile?: boolean }) {
   const lists: { title: string; icon: typeof Lightbulb; items: string[] }[] = [
     { title: "灵感方向", icon: Lightbulb, items: bb.ideas },
     { title: "材料素材", icon: Package, items: bb.materials },
@@ -331,7 +356,7 @@ function BlackboardPanel({ bb }: { bb: Blackboard }) {
     { title: "图纸", icon: Ruler, items: bb.diagrams },
   ];
   return (
-    <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-4 lg:block">
+    <aside className={mobile ? "bg-card p-4 pt-10" : "hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-4 lg:block"}>
       <h2 className="text-base font-semibold">共享状态黑板</h2>
       <p className="text-xs text-muted-foreground">所有智能体读写的同一份创作上下文</p>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
