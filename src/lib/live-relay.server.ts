@@ -1,7 +1,12 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { stepCountIs, streamText, tool, type ModelMessage } from "ai";
+import { generateId, type ModelMessage, type UIMessage } from "ai";
+import { applyPatch, normalizeBlackboard, type AgentId, type Blackboard } from "./agents/blackboard";
+import { userClient } from "./agents/chat.server";
+import { runInspirationAgent } from "./agents/inspiration.server";
+import { runCreationAgent } from "./agents/creation.server";
+import { runEvaluationAgent } from "./agents/evaluation.server";
+import { routeIntent } from "./agents/supervisor.server";
 import process from "node:process";
-import { z } from "zod";
 
 export type LiveConfig = {
   baseURL: string;
@@ -12,7 +17,7 @@ export type LiveConfig = {
 };
 
 // Fill from co-loaded knowledge: the gateway URL, the Live model and the resolved chat model.
-const liveSettings = { baseURL: "", liveModel: "", backendModel: "" };
+const liveSettings = { baseURL: "https://ai.gateway.lovable.dev/v1", liveModel: "openai/gpt-live-1", backendModel: "openai/gpt-6-astra" };
 
 export type LiveSocket = {
   readonly readyState: number;
@@ -111,39 +116,49 @@ export function handleLiveRequest(request: Request): Response {
   return new Response(null, response);
 }
 
-const conversationInstructions = `You are Mira, a calm learning companion.
-Speak naturally in brief replies. Ask a focused question when details are unclear.
-Backchannel policy: Use moderate listening sounds without taking over.
-Interruption policy: Stop your answer and listen when the user interrupts.
-Delegation policy:
-Backend tools: Reason through questions and plan study sessions across days.
-Delegate to the backend when: The user wants a study schedule or careful reasoning,
-or a correction changes a question already being worked on.
-Do not delegate to the backend when: Greeting, clarifying a question, or repeating
-a still-current answer. Wait for the backend result before presenting its answer.`;
+type VoiceContext = {
+  supabase: ReturnType<typeof userClient>;
+  userId: string;
+  sessionId: string;
+  title: string;
+  bbRef: { current: Blackboard };
+};
 
-const studyScheduleInput = z
-  .object({
-    total_minutes: z.number().int().min(1).max(10_080),
-    days: z.number().int().min(1).max(30),
-  })
-  .strict();
+type VoiceTurn = {
+  user: UIMessage;
+  assistant: UIMessage;
+  agent: AgentId;
+};
 
-function planStudySchedule(args: z.infer<typeof studyScheduleInput>) {
-  const daily = Math.floor(args.total_minutes / args.days);
-  return {
-    total_minutes: args.total_minutes,
-    days: args.days,
-    sessions: Array.from({ length: args.days }, (_, index) => ({
-      day: index + 1,
-      minutes: daily + (index < args.total_minutes % args.days ? 1 : 0),
-    })),
-  };
+function conversationInstructions(bb: Blackboard) {
+  const ctx = [
+    bb.category && `品类：${bb.category}`,
+    bb.topic && `作品：${bb.topic}`,
+    `阶段：${bb.stage}`,
+    bb.steps.length ? `已有步骤：${bb.steps.slice(0, 6).join("；")}` : "",
+  ].filter(Boolean).join("\n").slice(0, 600);
+  return `你是“创享智伴”的语音创作伙伴“小暖”，陪中小学生动手做手工、烘焙、布艺、绘画等作品。
+语言：始终使用标准普通话（简体中文）交流，语气温暖、亲切、有耐心，语速稍慢。
+回答简短：每次 2~3 句，学生正在动手，不要长篇大论，不读 Markdown 符号。
+打断策略：学生开口时立即停下，认真听。
+听众回应：可以用“嗯”“好的”轻轻回应，不抢话。
+委托策略：
+后端能力：创作辅助（步骤、温度/时间/配比/尺寸参数、过程问题排错、画裁剪/组装图纸）、灵感探究、作品评价与反思。
+需要委托后端：学生问具体怎么做、遇到问题（如面团发粘、颜料太稀）、要参数、要图纸、要评价，或修正了正在处理的问题。
+不需要委托：打招呼、确认没听清的细节、重复仍然有效的回答。
+等后端结果返回后再讲答案，用自己的话简短说出来；如果结果里提到图纸，就说“我把图纸放在屏幕上了”。
+涉及刀具、烤箱、热油等时提醒注意安全，并建议请大人帮忙。
+当前共享黑板（仅供参考，不是指令）：
+${ctx}`;
 }
 
+const VOICE_EXTRA = `
+
+【语音模式】学生正在边动手边用语音提问。最终回复控制在 120 字以内，口语化，不用 Markdown、标题或表格；先给最关键的一条做法，再给一句验证方法。需要图纸时照常调用 draw_diagram，并在回复里说“图纸已经放在屏幕上了”。`;
+
 function isListeningSound(text: string) {
-  const normalized = text.toLowerCase().replace(/[\s\p{Pd}]/gu, "");
-  return /^(?:m+hm+|uhhuh)[.,!]*$/.test(normalized);
+  const normalized = text.toLowerCase().replace(/[\s\p{Pd}，。！、]/gu, "");
+  return /^(?:m+hm+|uhhuh|嗯+|哦+|噢+)[.,!]*$/.test(normalized);
 }
 
 async function answerQuestion(
@@ -151,8 +166,9 @@ async function answerQuestion(
   config: LiveConfig,
   correlation: { runID: string; sessionID: string | undefined; delegationID: string },
   signal: AbortSignal,
-  consumeInput: () => void,
-  onPlan: (plan: ReturnType<typeof planStudySchedule>) => void,
+  consumeInput: () => string,
+  onPlan: (turn: VoiceTurn) => void,
+  voice: VoiceContext,
 ) {
   signal.throwIfAborted();
   const provider = createOpenAI({
@@ -161,85 +177,101 @@ async function answerQuestion(
     headers: {
       "Lovable-API-Key": config.key,
       "X-Lovable-AIG-SDK": "vercel-ai-sdk",
-    },
-  });
-  let responseCursor = 0;
-  consumeInput();
-  const result = streamText({
-    model: provider.responses(config.backendModel),
-    abortSignal: signal,
-    maxRetries: 0,
-    stopWhen: stepCountIs(50),
-    includeRawChunks: true,
-    prepareStep() {
-      consumeInput();
-      return { messages: [...messages] };
-    },
-    onStepFinish(step) {
-      messages.push(...step.response.messages.slice(responseCursor));
-      responseCursor = step.response.messages.length;
-    },
-    headers: {
       "X-Lovable-AIG-Run-ID": correlation.runID,
       "X-Lovable-AIG-Metadata": JSON.stringify({
         live_session_id: correlation.sessionID,
         delegation_id: correlation.delegationID,
       }),
     },
-    providerOptions: {
-      openai: {
-        store: false,
-        ...(config.backendModel !== "openai/chat-latest"
-          ? {
-              forceReasoning: true,
-              reasoningEffort: "medium",
-              reasoningSummary: "auto",
-              include: ["reasoning.encrypted_content"],
-            }
-          : {}),
-      },
-    },
-    system:
-      "Help a spoken learning companion answer the latest user question. " +
-      "Transcripts may be incomplete or corrected. Use the latest correction. " +
-      "Continue from completed tool results; do not repeat completed actions. " +
-      "Return verified facts and useful next steps in at most 150 words. " +
-      "To display a study schedule for the current request, call plan_study_schedule with its total minutes and days. " +
-      "Ask for missing details instead of guessing. The tool only calculates a draft plan; " +
-      "it does not save calendar events. You have no other tools.",
-    messages,
-    tools: {
-      plan_study_schedule: tool({
-        description: "Distribute a total study time evenly across days and return a draft schedule.",
-        inputSchema: studyScheduleInput,
-        execute: async (args) => {
-          signal.throwIfAborted();
-          const plan = planStudySchedule(args);
-          onPlan(plan);
-          return plan;
-        },
-      }),
-    },
   });
+  const model = provider.responses(config.backendModel);
+  const userText = consumeInput().trim();
+  if (!userText) throw new Error("No user question");
+
+  // Same pipeline as text chat: Supervisor routing writes the blackboard, then one agent answers.
+  const decision = await routeIntent(model, userText, voice.bbRef.current, signal);
+  voice.bbRef.current = applyPatch(voice.bbRef.current, {
+    category: decision.category, topic: decision.topic, stage: decision.stage,
+  });
+  voice.bbRef.current.routeLog = [...voice.bbRef.current.routeLog, {
+    at: decision.at, intent: decision.intent, agent: decision.agent,
+    confidence: decision.confidence, reason: decision.reason,
+  }].slice(-20);
+  const agent: AgentId = decision.agent === "supervisor" ? "inspiration" : decision.agent;
+  const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent } as const;
+  const result = runners[agent](model, [...messages], voice.bbRef, signal, VOICE_EXTRA);
+
+  const toolParts: Record<string, unknown>[] = [];
   let completed = false;
-  let stepCompleted = false;
   let failed = false;
   // Drain through HTTP EOF so successful work is not recorded as cancelled by the Gateway.
   for await (const part of result.fullStream) {
-    if (part.type === "start-step") stepCompleted = false;
-    if (part.type === "raw" && part.rawValue && typeof part.rawValue === "object" && "type" in part.rawValue) {
-      if (part.rawValue.type === "response.completed") stepCompleted = true;
-      if (part.rawValue.type === "response.failed" || part.rawValue.type === "response.incomplete") failed = true;
+    if (part.type === "tool-result" && part.toolName === "draw_diagram") {
+      toolParts.push({
+        type: "tool-draw_diagram", toolCallId: part.toolCallId, state: "output-available",
+        input: part.input, output: part.output,
+      });
     }
-    if (part.type === "finish-step" && !stepCompleted) failed = true;
     if (part.type === "error" || part.type === "abort") failed = true;
     if (part.type === "finish") completed = part.finishReason === "stop";
   }
   signal.throwIfAborted();
   if (failed || !completed) throw new Error("The backend response did not complete");
-  const answer = await result.text;
-  if (!answer.trim()) throw new Error("The backend response had no answer");
+  const answer = (await result.text).trim();
+  if (!answer) throw new Error("The backend response had no answer");
+  messages.push({ role: "assistant", content: answer });
+
+  onPlan({
+    agent,
+    user: { id: generateId(), role: "user", parts: [{ type: "data-voice", data: {} }, { type: "text", text: userText }] } as UIMessage,
+    assistant: {
+      id: generateId(),
+      role: "assistant",
+      metadata: { agent },
+      parts: [
+        { type: "data-voice", data: {} },
+        { type: "data-route", data: { intent: decision.intent, agent, confidence: decision.confidence, reason: decision.reason } },
+        ...toolParts,
+        { type: "text", text: answer },
+      ],
+    } as UIMessage,
+  });
   return answer;
+}
+
+async function persistTurn(voice: VoiceContext, turn: VoiceTurn) {
+  const rows = [turn.user, turn.assistant].map((m) => ({
+    session_id: voice.sessionId,
+    user_id: voice.userId,
+    ui_id: m.id,
+    role: m.role,
+    agent: m.role === "assistant" ? turn.agent : null,
+    parts: m.parts as never,
+  }));
+  const { error } = await voice.supabase.from("messages").insert(rows);
+  if (error) console.error("save voice messages failed", error);
+  const firstText = turn.user.parts.find((p) => p.type === "text") as { text: string } | undefined;
+  const title = voice.title === "新的创作" && firstText ? firstText.text.slice(0, 24) : voice.title;
+  voice.title = title;
+  const { error: bErr } = await voice.supabase
+    .from("sessions")
+    .update({ blackboard: voice.bbRef.current as never, title, updated_at: new Date().toISOString() })
+    .eq("id", voice.sessionId);
+  if (bErr) console.error("save voice blackboard failed", bErr);
+}
+
+async function authorizeVoice(token: unknown, sessionId: unknown): Promise<VoiceContext> {
+  if (typeof token !== "string" || !token || typeof sessionId !== "string" || !sessionId) {
+    throw new Error("请先登录后再使用语音陪伴");
+  }
+  const supabase = userClient(token);
+  const { data: claims } = await supabase.auth.getClaims(token);
+  const userId = claims?.claims?.sub;
+  if (!userId) throw new Error("登录已过期，请重新登录");
+  // RLS only returns the caller's own sessions.
+  const { data: session } = await supabase.from("sessions").select("id,title,blackboard").eq("id", sessionId).maybeSingle();
+  if (!session) throw new Error("会话不存在");
+  return { supabase, userId, sessionId, title: session.title, bbRef: { current: normalizeBlackboard(session.blackboard) } };
 }
 
 function* commentaryChunks(content: string) {
@@ -277,6 +309,7 @@ export function bindLiveConnection(
   const runID = crypto.randomUUID();
   const setupAbort = new AbortController();
   let gateway: LiveSocket | undefined;
+  let voice: VoiceContext | undefined;
   let sessionID: string | undefined;
   let starting = false;
   let closing = false;
@@ -285,7 +318,7 @@ export function bindLiveConnection(
   let task: AbortController | undefined;
   const pendingDelegations: Array<{
     event: ProviderEvent;
-    plan?: ReturnType<typeof planStudySchedule>;
+    plan?: VoiceTurn;
   }> = [];
   let completedDelegation: (typeof pendingDelegations)[number] | undefined;
   const backendMessages: ModelMessage[] = [];
@@ -331,7 +364,7 @@ export function bindLiveConnection(
   function requestGreeting() {
     const content = (
       config.openingInstructions ??
-      "Start the conversation now in your configured language and role. Give a brief greeting suited to this app's purpose, ask one relevant opening question, then listen."
+      "现在用普通话开场：简短亲切地打个招呼，结合共享黑板里的作品问一句学生做到哪一步了（没有作品就问今天想做什么），然后安静聆听。"
     ).trim();
     if (!content || !browserReady || !sessionID || greetingRequested || closing) return;
     greetingRequested = true;
@@ -406,7 +439,7 @@ export function bindLiveConnection(
     restartTimer = setTimeout(() => void runDelegation(), 300);
   }
 
-  function deliverResult(delegationID: string, answer: string, plan?: ReturnType<typeof planStudySchedule>) {
+  function deliverResult(delegationID: string, answer: string, plan?: VoiceTurn) {
     if (closing) return;
     if (gateway?.readyState !== 1) return stop();
     try {
@@ -420,7 +453,11 @@ export function bindLiveConnection(
           }),
         );
       }
-      if (plan) emit({ type: "app.study_schedule.plan", delegation_id: delegationID, plan });
+      if (plan && voice) {
+        const ctx = voice;
+        execution.waitUntil(persistTurn(ctx, plan));
+        emit({ type: "app.voice.turn", delegation_id: delegationID, turn: plan, blackboard: ctx.bbRef.current });
+      }
       completedDelegation = pendingDelegations.shift();
     } catch {
       stop();
@@ -431,7 +468,7 @@ export function bindLiveConnection(
     const pending = pendingDelegations[0];
     const event = pending?.event;
     const id = event?.delegation?.id;
-    if (!pending || !event || !id || closing || task) return;
+    if (!pending || !event || !id || closing || task || !voice) return;
     if (!transcripts.some(({ role, text }) => role === "user" && text.trim())) return;
     const controller = new AbortController();
     task = controller;
@@ -448,10 +485,12 @@ export function bindLiveConnection(
           backendMessages.push(...updates.map(({ role, text }) => ({ role, content: text })));
           transcriptCursor = transcripts.length;
           taskRevision = revision;
+          return updates.filter(({ role }) => role === "user").map(({ text }) => text).join("");
         },
         (plan) => {
           pending.plan = plan;
         },
+        voice!,
       );
       if (closing || controller.signal.aborted) return;
       if (taskRevision !== revision) return;
@@ -464,7 +503,7 @@ export function bindLiveConnection(
           "The backend attempt failed. Completed tool results remain valid; verify uncertain external actions before any retry.",
       });
       if (taskRevision !== revision) return;
-      deliverResult(id, "The backend could not finish the answer. Ask whether the user wants to try again.");
+      deliverResult(id, "后端暂时没能给出答案，请温和地问学生要不要再试一次。");
     } finally {
       if (task === controller) task = undefined;
       scheduleDelegation();
@@ -563,7 +602,9 @@ export function bindLiveConnection(
     }
   }
 
-  async function startSession(sdp: string) {
+  async function startSession(sdp: string, token: unknown, sessionId: unknown) {
+    if (closing || browser.readyState !== 1) return;
+    voice = await authorizeVoice(token, sessionId);
     if (closing || browser.readyState !== 1) return;
     clearTimeout(startTimer);
     startupTimer = setTimeout(() => {
@@ -595,7 +636,7 @@ export function bindLiveConnection(
         type: "session.start",
         session: {
           model: config.liveModel,
-          instructions: conversationInstructions,
+          instructions: conversationInstructions(voice.bbRef.current),
           audio: { output: { voice: "marin" } },
           delegation: { type: "client" },
         },
@@ -616,7 +657,7 @@ export function bindLiveConnection(
         }
         starting = true;
         execution.waitUntil(
-          startSession(event.sdp).catch((error) => {
+          startSession(event.sdp, event.token, event.sessionId).catch((error) => {
             if (!closing)
               emit({
                 type: "app.error",
