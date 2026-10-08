@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle } from "lucide-react";
+import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AGENT_LABELS,
@@ -21,6 +21,8 @@ import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/componen
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
+import { DiagramCard } from "@/components/diagram-card";
+import { VoiceCompanion } from "@/components/voice-companion";
 
 export const Route = createFileRoute("/_authenticated/chat/$sessionId")({
   staticData: { sitemap: false },
@@ -138,7 +140,7 @@ function ChatWindow({ sessionId, initialMessages, initialBlackboard }: { session
     [],
   );
 
-  const { messages, sendMessage, status, stop } = useChat({
+  const { messages, sendMessage, status, stop, setMessages } = useChat({
     id: sessionId,
     messages: initialMessages,
     transport,
@@ -185,6 +187,15 @@ function ChatWindow({ sessionId, initialMessages, initialBlackboard }: { session
           <ConversationScrollButton />
         </Conversation>
         <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+          <VoiceCompanion
+            sessionId={sessionId}
+            onTurn={(e) => {
+              const turn = e["turn"] as { user: UIMessage; assistant: UIMessage } | undefined;
+              if (turn) setMessages((m) => [...m, turn.user, turn.assistant]);
+              if (e["blackboard"]) setBb(normalizeBlackboard(e["blackboard"]));
+              qc.invalidateQueries({ queryKey: ["sessions"] });
+            }}
+          />
           <PromptInput
             onSubmit={({ text }) => {
               if (!text.trim() || busy) return;
@@ -229,6 +240,11 @@ function ChatMessage({ message }: { message: UIMessage }) {
           if (p.type === "text") return message.role === "user" ? <p key={i} className="whitespace-pre-wrap">{p.text}</p> : <MessageResponse key={i}>{p.text}</MessageResponse>;
           if (p.type === "reasoning" && p.text)
             return <p key={i} className="border-l-2 pl-2 text-xs text-muted-foreground">{p.text}</p>;
+          if (p.type === "tool-draw_diagram") {
+            const tp = p as { input?: unknown };
+            return tp.input && (p as { state?: string }).state !== "input-streaming" ? <DiagramCard key={i} input={tp.input} /> : <Shimmer key={i} className="text-sm">正在画图纸…</Shimmer>;
+          }
+          if (p.type === "data-voice" && message.role === "user") return <span key={i} className="text-xs opacity-80">🎙 语音</span>;
           if (p.type === "tool-update_blackboard")
             return (
               <Tool key={i} defaultOpen={false}>
@@ -257,6 +273,7 @@ function BlackboardPanel({ bb }: { bb: Blackboard }) {
     { title: "循证评价", icon: Star, items: bb.evaluation },
     { title: "反思问题", icon: MessageCircleQuestion, items: bb.reflections },
     { title: "成本与资源循环", icon: Recycle, items: bb.resourceTips },
+    { title: "图纸", icon: Ruler, items: bb.diagrams },
   ];
   return (
     <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-card p-4 lg:block">
