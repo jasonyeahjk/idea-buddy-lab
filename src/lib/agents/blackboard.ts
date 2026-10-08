@@ -42,6 +42,7 @@ export interface Blackboard {
   evaluation: string[];
   reflections: string[];
   resourceTips: string[];
+  diagrams: string[]; // "标题：尺寸摘要"
   routeLog: RouteRecord[];
 }
 
@@ -59,6 +60,7 @@ export const emptyBlackboard = (): Blackboard => ({
   evaluation: [],
   reflections: [],
   resourceTips: [],
+  diagrams: [],
   routeLog: [],
 });
 
@@ -85,6 +87,7 @@ export interface BlackboardPatch {
   evaluation?: string[];
   reflections?: string[];
   resourceTips?: string[];
+  diagrams?: string[];
 }
 
 /** Merge a patch: scalar fields overwrite when provided, list fields append + dedupe. */
@@ -104,6 +107,7 @@ export function applyPatch(bb: Blackboard, p: BlackboardPatch): Blackboard {
     evaluation: p.evaluation?.length ? p.evaluation.slice(0, 6) : bb.evaluation,
     reflections: p.reflections?.length ? p.reflections.slice(0, 5) : bb.reflections,
     resourceTips: uniq(bb.resourceTips, p.resourceTips),
+    diagrams: uniq(bb.diagrams, p.diagrams, 8),
   };
 }
 
