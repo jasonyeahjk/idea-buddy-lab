@@ -1,17 +1,10 @@
 # 三项新需求计划
 
-## 1. 微信公众号扫码登录
-**你需要先准备（我无法代办）：**
-- 一个已微信认证的「服务号」（订阅号不支持带参数二维码）
-- 服务号的 AppID、AppSecret，以及自定义一个 Token（用于消息接口校验）
-- 在公众号后台「基本配置」里填入我提供的服务器地址并启用
-
-**流程：**
-- 登录页新增「微信扫码登录」按钮，弹出公众号二维码
-- 学生用微信扫码：未关注的先关注，已关注的直接进入；公众号自动回复「登录成功」
-- 网页自动检测到扫码后完成登录（新用户自动建号，保存微信昵称）
-- 二维码 5 分钟有效，过期可刷新；原有 Google / 邮箱登录保留
-- 拿到公众号信息前，按钮显示「即将开放」
+## 1. 登录方式：Google / Apple / 微软 / 邮箱 / 微信（暂未开放）
+- 登录页现有 Google 和邮箱登录保留
+- 新增「使用 Apple 继续」「使用微软账号继续」两个按钮，可直接使用
+- 新增绿色「微信登录」按钮，点击提示「微信登录暂未开放，敬请期待」，不跳转
+- 按钮顺序：微信、Google、Apple、微软，下方是邮箱登录表单
 
 ## 2. 创作清单删除单个会话
 - 左侧会话列表每一项悬停时出现「⋯」菜单 → 「删除」
@@ -25,6 +18,6 @@
 - 简介文案与网页标题/描述同步更新
 
 ## 技术细节
-- 微信：服务器用 access_token 生成临时带参二维码（scene=随机登录票据），票据存 `wechat_login_tickets` 表（仅服务器读写）。`/api/public/wechat/callback` 接收公众号事件推送，校验 Token 签名后，把 subscribe/SCAN 事件的 openid 写入对应票据。前端每 2 秒轮询票据；完成后服务器按合成邮箱 `wx_<openid>@wechat.local` 查找/创建用户（自动确认）并生成一次性登录 token，前端 `verifyOtp` 登录。新增 `profiles`（昵称、wechat_openid 唯一），RLS 仅本人。密钥 WECHAT_MP_APP_ID / WECHAT_MP_APP_SECRET / WECHAT_MP_TOKEN 通过密钥表单添加。
-- 删除：先删该会话 messages 再删 sessions（现有 RLS 已限定本人），失效会话列表缓存。
+- 登录：调用社交登录配置开启 apple、microsoft（google 保持），`/auth` 页用 `lovable.auth.signInWithOAuth("apple" | "microsoft")`；微信按钮仅 `toast.info`。
+- 删除：先删该会话 messages 再删 sessions（现有 RLS 已限定本人），失效会话列表缓存；若删的是当前会话则 navigate 到下一个或 `/chat`。
 - 首页：更新 `src/routes/index.tsx` 的智能体列表、功能区和 head()。
