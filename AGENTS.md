@@ -15,3 +15,5 @@
 - Per-session blackboard is stored as jsonb on `sessions`; messages persisted server-side in `onFinish` using the caller's token (RLS). Why: no admin client needed.
 - Voice companion uses GPT Live with client delegation: `/api/live` (server.ts in prod, `live-vite-plugin.ts` in dev) authorizes token + session, then reuses Supervisor and the same agents with a short spoken-answer suffix; turns persist into the same messages table. Why: one agent stack serves text and voice.
 - Diagrams are structured millimetre specs (`diagram.ts`) emitted via the `draw_diagram` tool and rendered to SVG on the client. Why: printable at 1:1 and safe to sanitize.
+- Learning-progress taxonomies are static client-safe data modules (e.g. `english-taxonomy.ts`: micro-topics + mastery evidence + prerequisite graph); agents only write progress via evidence tools merged by `applyPatch`. Why: mastery rules stay deterministic and testable, not model-decided.
+- Voice `mode` ("zh" | "en") is sent in `app.start`; English mode swaps Live instructions/greeting and always dispatches to the English agent. Why: one relay serves both companion and speaking practice.
