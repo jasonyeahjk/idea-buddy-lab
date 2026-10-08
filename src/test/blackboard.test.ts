@@ -27,3 +27,18 @@ describe("evaluation fields", () => {
     expect(b.resourceTips).toEqual(["边角料做书签", "剩余面团冷冻"]);
   });
 });
+
+describe("diagrams", () => {
+  it("appends diagram summaries, deduped, capped at 8", () => {
+    let bb = emptyBlackboard();
+    for (let i = 0; i < 10; i++) bb = applyPatch(bb, { diagrams: [`图${i}`, `图${i}`] });
+    expect(bb.diagrams).toHaveLength(8);
+    expect(bb.diagrams[7]).toBe("图9");
+  });
+  it("clamps oversized diagrams to 1000 mm", async () => {
+    const { sanitizeDiagram } = await import("@/lib/agents/diagram");
+    const d = sanitizeDiagram({ title: "t", width: 5000, height: 200, shapes: [], notes: [] });
+    expect(d.width).toBe(1000);
+    expect(d.height).toBe(200);
+  });
+});
