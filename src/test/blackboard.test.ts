@@ -75,3 +75,13 @@ describe("english agent", () => {
     ENGLISH_TOPICS.forEach((t) => visit(t.id));
   });
 });
+
+describe("normalizeBlackboard", () => {
+  it("fills new fields for older saved boards", async () => {
+    const { normalizeBlackboard } = await import("@/lib/agents/blackboard");
+    const bb = normalizeBlackboard({ topic: "灯笼", englishProgress: null });
+    expect(bb.topic).toBe("灯笼");
+    expect(bb.englishProgress).toEqual({});
+    expect(bb.vocab).toEqual([]);
+  });
+});

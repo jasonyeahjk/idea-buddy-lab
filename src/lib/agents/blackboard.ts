@@ -79,7 +79,13 @@ export const emptyBlackboard = (): Blackboard => ({
 export function normalizeBlackboard(raw: unknown): Blackboard {
   const base = emptyBlackboard();
   if (!raw || typeof raw !== "object") return base;
-  return { ...base, ...(raw as Partial<Blackboard>) };
+  const merged = { ...base } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    // Keep defaults for missing/null fields so older saved boards stay valid.
+    if (v !== null && v !== undefined) merged[k] = v;
+    else if (!(k in base) || (base as unknown as Record<string, unknown>)[k] === null) merged[k] = v ?? null;
+  }
+  return merged as unknown as Blackboard;
 }
 
 const uniq = (a: string[], b: string[] | undefined, cap = 12) =>
