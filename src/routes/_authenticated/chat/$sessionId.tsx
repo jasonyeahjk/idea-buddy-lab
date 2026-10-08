@@ -190,9 +190,9 @@ function ChatWindow({ sessionId, initialMessages, initialBlackboard }: { session
           <VoiceCompanion
             sessionId={sessionId}
             onTurn={(e) => {
-              const turn = e.turn as { user: UIMessage; assistant: UIMessage } | undefined;
+              const turn = e["turn"] as { user: UIMessage; assistant: UIMessage } | undefined;
               if (turn) setMessages((m) => [...m, turn.user, turn.assistant]);
-              if (e.blackboard) setBb(normalizeBlackboard(e.blackboard));
+              if (e["blackboard"]) setBb(normalizeBlackboard(e["blackboard"]));
               qc.invalidateQueries({ queryKey: ["sessions"] });
             }}
           />

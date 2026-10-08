@@ -12,7 +12,7 @@ const STYLE: Record<string, { stroke: string; dash?: string; width: number }> = 
 };
 
 function Shape({ s }: { s: DiagramShape }) {
-  const st = STYLE[s.style ?? "cut"] ?? STYLE.cut!;
+  const st = STYLE[s.style ?? "cut"] ?? STYLE["cut"]!;
   const common = { stroke: st.stroke, strokeWidth: st.width, strokeDasharray: st.dash, fill: s.style === "glue" ? "var(--accent)" : "none" };
   const p = s.points;
   const label = (x: number, y: number) =>

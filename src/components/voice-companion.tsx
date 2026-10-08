@@ -15,8 +15,8 @@ export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTur
     },
     onEvent: (e) => {
       if (e.type === "session.input_transcript.delta" || e.type === "session.output_transcript.delta") {
-        const role = e.type === "session.input_transcript.delta" ? "user" : "assistant";
-        const delta = String(e.delta ?? "");
+        const role: Caption["role"] = e.type === "session.input_transcript.delta" ? "user" : "assistant";
+        const delta = String(e["delta"] ?? "");
         setCaptions((c) => {
           const last = c[c.length - 1];
           if (last?.role === role) return [...c.slice(0, -1), { role, text: last.text + delta }];
