@@ -1,3 +1,4 @@
+import { runEnglishAgent } from "./english.server";
 import { createClient } from "@supabase/supabase-js";
 import {
   convertToModelMessages,
@@ -100,7 +101,7 @@ export async function handleChat(request: Request): Promise<Response> {
       });
 
       // 2. Dispatch to the target agent
-      const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent } as const;
+      const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent, english: runEnglishAgent } as const;
       const runner = decision.agent !== "supervisor" && AGENT_READY[decision.agent] ? runners[decision.agent] : null;
       if (runner) {
         const result = runner(model, await convertToModelMessages(messages), bbRef, request.signal);

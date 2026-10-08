@@ -1,3 +1,4 @@
+import { runEnglishAgent } from "./agents/english.server";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateId, type ModelMessage, type UIMessage } from "ai";
 import { applyPatch, normalizeBlackboard, type AgentId, type Blackboard } from "./agents/blackboard";
@@ -198,7 +199,7 @@ async function answerQuestion(
     confidence: decision.confidence, reason: decision.reason,
   }].slice(-20);
   const agent: AgentId = decision.agent === "supervisor" ? "inspiration" : decision.agent;
-  const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent } as const;
+  const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent, english: runEnglishAgent } as const;
   const result = runners[agent](model, [...messages], voice.bbRef, signal, VOICE_EXTRA);
 
   const toolParts: Record<string, unknown>[] = [];
