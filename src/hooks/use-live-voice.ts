@@ -283,7 +283,11 @@ function createLiveVoice(options: LiveOptions) {
   async function gatherCandidates(connection: RTCPeerConnection) {
     if (connection.iceGatheringState === "complete") return;
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => finish(new Error("Voice network setup timed out")), 10_000);
+      // Slow STUN servers can keep gathering open; continue with the candidates found so far.
+      const timeout = setTimeout(() => {
+        const sdp = connection.localDescription?.sdp ?? "";
+        finish(sdp.includes("a=candidate") ? undefined : new Error("Voice network setup timed out"));
+      }, 10_000);
       function finish(error?: Error) {
         clearTimeout(timeout);
         connection.removeEventListener("icegatheringstatechange", changed);
