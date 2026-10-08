@@ -221,9 +221,9 @@ async function answerQuestion(
   let failed = false;
   // Drain through HTTP EOF so successful work is not recorded as cancelled by the Gateway.
   for await (const part of result.fullStream) {
-    if (part.type === "tool-result" && part.toolName === "draw_diagram") {
+    if (part.type === "tool-result" && (part.toolName === "draw_diagram" || part.toolName === "add_vocab_cards")) {
       toolParts.push({
-        type: "tool-draw_diagram", toolCallId: part.toolCallId, state: "output-available",
+        type: `tool-${part.toolName}`, toolCallId: part.toolCallId, state: "output-available",
         input: part.input, output: part.output,
       });
     }

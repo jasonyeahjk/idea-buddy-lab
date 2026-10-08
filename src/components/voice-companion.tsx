@@ -8,10 +8,11 @@ type Caption = { role: "user" | "assistant"; text: string };
 
 export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTurn: (event: LiveEvent) => void }) {
   const [captions, setCaptions] = useState<Caption[]>([]);
+  const [mode, setMode] = useState<"zh" | "en">("zh");
   const voice = useLiveVoice({
     startPayload: async () => {
       const { data } = await supabase.auth.getSession();
-      return { token: data.session?.access_token ?? "", sessionId };
+      return { token: data.session?.access_token ?? "", sessionId, mode };
     },
     onEvent: (e) => {
       if (e.type === "session.input_transcript.delta" || e.type === "session.output_transcript.delta") {
@@ -40,7 +41,16 @@ export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTur
         {active ? (
           <Button size="sm" variant="destructive" onClick={voice.stop}><PhoneOff className="mr-1 h-4 w-4" />结束语音</Button>
         ) : (
-          <Button size="sm" variant="secondary" onClick={() => { setCaptions([]); voice.start(); }}><Mic className="mr-1 h-4 w-4" />语音陪伴</Button>
+          <Button size="sm" variant="secondary" onClick={() => { setCaptions([]); voice.start(); }}><Mic className="mr-1 h-4 w-4" />{mode === "en" ? "英语口语练习" : "语音陪伴"}</Button>
+        )}
+        {!active && (
+          <div className="flex overflow-hidden rounded-md border text-xs" role="group" aria-label="语音语言">
+            {(["zh", "en"] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setMode(m)} className={m === mode ? "bg-secondary px-2 py-1 font-medium text-secondary-foreground" : "px-2 py-1 text-muted-foreground"}>
+                {m === "zh" ? "中文" : "English"}
+              </button>
+            ))}
+          </div>
         )}
         {active && <span className="flex items-center gap-1 text-xs text-muted-foreground">{voice.status === "connecting" && <Loader2 className="h-3 w-3 animate-spin" />}{label}</span>}
         {voice.playbackBlocked && <Button size="sm" variant="ghost" onClick={voice.resumePlayback}>点此播放声音</Button>}
