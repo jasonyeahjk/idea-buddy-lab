@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler } from "lucide-react";
+import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler, Languages, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AGENT_LABELS,
@@ -23,6 +23,9 @@ import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 import { DiagramCard } from "@/components/diagram-card";
 import { VoiceCompanion } from "@/components/voice-companion";
+import { VocabCards, speak } from "@/components/vocab-cards";
+import { ENGLISH_TOPICS, nextRecommended } from "@/lib/agents/english-taxonomy";
+import type { VocabCard } from "@/lib/agents/blackboard";
 
 export const Route = createFileRoute("/_authenticated/chat/$sessionId")({
   staticData: { sitemap: false },
@@ -244,6 +247,20 @@ function ChatMessage({ message }: { message: UIMessage }) {
             const tp = p as { input?: unknown };
             return tp.input && (p as { state?: string }).state !== "input-streaming" ? <DiagramCard key={i} input={tp.input} /> : <Shimmer key={i} className="text-sm">正在画图纸…</Shimmer>;
           }
+          if (p.type === "tool-add_vocab_cards") {
+            const tp = p as { input?: { cards?: VocabCard[] }; state?: string };
+            return tp.state === "input-streaming" || !tp.input?.cards ? <Shimmer key={i} className="text-sm">正在制作词汇卡…</Shimmer> : <VocabCards key={i} cards={tp.input.cards} />;
+          }
+          if (p.type === "tool-record_evidence")
+            return (
+              <Tool key={i} defaultOpen={false}>
+                <ToolHeader type={p.type} state={p.state} title="记录英语学习证据" />
+                <ToolContent>
+                  <ToolInput input={p.input} />
+                  <ToolOutput output={p.output} errorText={p.errorText} />
+                </ToolContent>
+              </Tool>
+            );
           if (p.type === "data-voice" && message.role === "user") return <span key={i} className="text-xs opacity-80">🎙 语音</span>;
           if (p.type === "tool-update_blackboard")
             return (
@@ -310,6 +327,7 @@ function BlackboardPanel({ bb }: { bb: Blackboard }) {
           )}
         </div>
       ))}
+      <EnglishPanel bb={bb} />
       <div className="mt-4">
         <h3 className="mb-1 text-sm font-semibold">路由日志</h3>
         <ul className="space-y-1 text-xs">
@@ -323,5 +341,38 @@ function BlackboardPanel({ bb }: { bb: Blackboard }) {
         </ul>
       </div>
     </aside>
+  );
+}
+
+function EnglishPanel({ bb }: { bb: Blackboard }) {
+  const entries = Object.entries(bb.englishProgress);
+  const name = (id: string) => ENGLISH_TOPICS.find((t) => t.id === id)?.name ?? id;
+  const next = nextRecommended(bb.englishProgress, bb.englishLevel);
+  return (
+    <>
+      <div className="mt-4">
+        <h3 className="mb-1 flex items-center gap-1 text-sm font-semibold"><Languages className="h-4 w-4 text-primary" />英语词汇</h3>
+        {bb.vocab.length === 0 ? <p className="text-xs text-muted-foreground">暂无</p> : (
+          <ul className="flex flex-wrap gap-1">
+            {bb.vocab.map((v) => (
+              <li key={v.word}>
+                <button type="button" onClick={() => speak(v.word)} title={v.meaning} className="rounded-full bg-muted px-2 py-0.5 text-xs hover:bg-secondary">{v.word}</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="mt-4">
+        <h3 className="mb-1 flex items-center gap-1 text-sm font-semibold"><GraduationCap className="h-4 w-4 text-primary" />英语进度{bb.englishLevel && <span className="ml-1 rounded bg-secondary px-1.5 text-xs text-secondary-foreground">{bb.englishLevel}</span>}</h3>
+        {entries.length === 0 ? <p className="text-xs text-muted-foreground">暂无学习证据</p> : (
+          <ul className="space-y-0.5 text-sm">
+            {entries.map(([id, p]) => (
+              <li key={id} className="flex justify-between gap-2"><span className="truncate">{name(id)}</span><span className={cn("shrink-0 text-xs", p.status === "已掌握" ? "text-primary" : "text-muted-foreground")}>{p.status}</span></li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">推荐下一个：{next.map((t) => t.name).join("、") || "—"}</p>
+      </div>
+    </>
   );
 }
