@@ -345,16 +345,18 @@ function BlackboardPanel({ bb }: { bb: Blackboard }) {
 }
 
 function EnglishPanel({ bb }: { bb: Blackboard }) {
-  const entries = Object.entries(bb.englishProgress);
+  const progress = bb.englishProgress ?? {};
+  const vocab = bb.vocab ?? [];
+  const entries = Object.entries(progress);
   const name = (id: string) => ENGLISH_TOPICS.find((t) => t.id === id)?.name ?? id;
-  const next = nextRecommended(bb.englishProgress, bb.englishLevel);
+  const next = nextRecommended(progress, bb.englishLevel ?? null);
   return (
     <>
       <div className="mt-4">
         <h3 className="mb-1 flex items-center gap-1 text-sm font-semibold"><Languages className="h-4 w-4 text-primary" />英语词汇</h3>
-        {bb.vocab.length === 0 ? <p className="text-xs text-muted-foreground">暂无</p> : (
+        {vocab.length === 0 ? <p className="text-xs text-muted-foreground">暂无</p> : (
           <ul className="flex flex-wrap gap-1">
-            {bb.vocab.map((v) => (
+            {vocab.map((v) => (
               <li key={v.word}>
                 <button type="button" onClick={() => speak(v.word)} title={v.meaning} className="rounded-full bg-muted px-2 py-0.5 text-xs hover:bg-secondary">{v.word}</button>
               </li>
