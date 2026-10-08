@@ -49,9 +49,9 @@ function AuthPage() {
     if (mode === "up" && !data.session) toast.success("注册成功，请到邮箱点击确认链接");
   }
 
-  async function google() {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/auth" });
-    if (r.error) toast.error("Google 登录失败");
+  async function oauth(provider: "google" | "apple" | "microsoft", label: string) {
+    const r = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/auth" });
+    if (r.error) toast.error(`${label} 登录失败`);
   }
 
   return (
@@ -60,7 +60,14 @@ function AuthPage() {
         <img src={logo} alt="创享智伴" className="mx-auto h-16 w-16" />
         <h1 className="mt-3 text-center text-2xl font-semibold">创享智伴</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">从灵感到分享的创作伴学平台</p>
-        <Button variant="outline" className="mt-6 w-full" onClick={google}>使用 Google 继续</Button>
+        <div className="mt-6 space-y-2">
+          <Button className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={() => toast.info("微信登录暂未开放，敬请期待")}>
+            微信登录<span className="ml-2 rounded bg-background/60 px-1.5 text-[10px]">暂未开放</span>
+          </Button>
+          <Button variant="outline" className="w-full" onClick={() => oauth("google", "Google")}>使用 Google 继续</Button>
+          <Button variant="outline" className="w-full" onClick={() => oauth("apple", "Apple")}>使用 Apple 继续</Button>
+          <Button variant="outline" className="w-full" onClick={() => oauth("microsoft", "微软")}>使用微软账号继续</Button>
+        </div>
         <div className="my-4 text-center text-xs text-muted-foreground">或使用邮箱</div>
         <form onSubmit={submit} className="space-y-3">
           <Input type="email" placeholder="邮箱" value={email} onChange={(e) => setEmail(e.target.value)} required />
