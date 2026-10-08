@@ -4,7 +4,9 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler, Languages, GraduationCap } from "lucide-react";
+import { LogOut, Plus, Route as RouteIcon, ShieldAlert, Lightbulb, Package, HelpCircle, BookOpen, ListChecks, Star, MessageCircleQuestion, Recycle, Ruler, Languages, GraduationCap, MoreHorizontal, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AGENT_LABELS,
@@ -82,8 +84,38 @@ function ChatPage() {
     navigate({ to: "/chat/$sessionId", params: { sessionId: data.id } });
   }
 
+  const [toDelete, setToDelete] = useState<{ id: string; title: string } | null>(null);
+  async function confirmDelete() {
+    if (!toDelete) return;
+    const id = toDelete.id;
+    setToDelete(null);
+    const { error: e1 } = await supabase.from("messages").delete().eq("session_id", id);
+    const { error: e2 } = e1 ? { error: e1 } : await supabase.from("sessions").delete().eq("id", id);
+    if (e2) { toast.error("删除失败，请重试"); return; }
+    toast.success("已删除");
+    const rest = (sessions.data ?? []).filter((s) => s.id !== id);
+    qc.removeQueries({ queryKey: ["session", id] });
+    await qc.invalidateQueries({ queryKey: ["sessions"] });
+    if (id === sessionId) {
+      if (rest[0]) navigate({ to: "/chat/$sessionId", params: { sessionId: rest[0].id }, replace: true });
+      else navigate({ to: "/chat", replace: true });
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除「{toDelete?.title}」？</AlertDialogTitle>
+            <AlertDialogDescription>删除后该创作的对话和黑板记录都无法恢复。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">删除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
         <Link to="/" className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="" className="h-8 w-8" />
@@ -94,17 +126,23 @@ function ChatPage() {
         </div>
         <nav className="mt-3 flex-1 space-y-0.5 overflow-y-auto px-2">
           {sessions.data?.map((s) => (
-            <Link
-              key={s.id}
-              to="/chat/$sessionId"
-              params={{ sessionId: s.id }}
-              className={cn(
-                "block truncate rounded-md px-3 py-2 text-sm hover:bg-sidebar-accent",
-                s.id === sessionId && "bg-sidebar-accent font-medium",
-              )}
-            >
-              {s.title}
-            </Link>
+            <div key={s.id} className={cn("group flex items-center rounded-md hover:bg-sidebar-accent", s.id === sessionId && "bg-sidebar-accent font-medium")}>
+              <Link to="/chat/$sessionId" params={{ sessionId: s.id }} className="block flex-1 truncate px-3 py-2 text-sm">
+                {s.title}
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button aria-label="更多操作" className="mr-1 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="text-destructive" onSelect={() => setToDelete({ id: s.id, title: s.title })}>
+                    <Trash2 className="mr-2 h-4 w-4" />删除
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ))}
         </nav>
         <button
