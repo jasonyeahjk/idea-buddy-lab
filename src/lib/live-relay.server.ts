@@ -123,6 +123,7 @@ type VoiceContext = {
   sessionId: string;
   title: string;
   bbRef: { current: Blackboard };
+  mode: "zh" | "en";
 };
 
 type VoiceTurn = {
@@ -131,7 +132,20 @@ type VoiceTurn = {
   agent: AgentId;
 };
 
-function conversationInstructions(bb: Blackboard) {
+function englishInstructions(bb: Blackboard) {
+  return `You are "Xiao Nuan", a warm, patient English speaking partner for Chinese K-12 students who are making crafts, baking, or drawing.
+Speak simple, clear English, slowly. Adapt to the student's level (current estimate: ${bb.englishLevel ?? "unknown"}); if they seem lost, add a short Mandarin hint.
+Keep each reply to 1-2 short sentences. When the student makes a mistake, praise first, then say the natural version once and invite them to repeat it.
+Delegate to the backend when the student asks for words, a vocab card, a self-introduction of their work, or a correction; then say the result in your own words.
+Topic of their work: ${bb.topic ?? "unknown"}. Materials: ${bb.materials.slice(0, 6).join(", ") || "unknown"}.`;
+}
+
+const VOICE_EXTRA_EN = `
+
+【英语口语模式】学生在用语音练英语。最终回复不超过 60 个英文单词，不用 Markdown；以英文为主，必要时加一句中文提示。达到知识点证据时照常调用 record_evidence，需要单词时调用 add_vocab_cards。`;
+
+function conversationInstructions(bb: Blackboard, mode: "zh" | "en" = "zh") {
+  if (mode === "en") return englishInstructions(bb);
   const ctx = [
     bb.category && `品类：${bb.category}`,
     bb.topic && `作品：${bb.topic}`,
@@ -198,9 +212,9 @@ async function answerQuestion(
     at: decision.at, intent: decision.intent, agent: decision.agent,
     confidence: decision.confidence, reason: decision.reason,
   }].slice(-20);
-  const agent: AgentId = decision.agent === "supervisor" ? "inspiration" : decision.agent;
+  const agent: AgentId = voice.mode === "en" ? "english" : decision.agent === "supervisor" ? "inspiration" : decision.agent;
   const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent, english: runEnglishAgent } as const;
-  const result = runners[agent](model, [...messages], voice.bbRef, signal, VOICE_EXTRA);
+  const result = runners[agent](model, [...messages], voice.bbRef, signal, voice.mode === "en" ? VOICE_EXTRA_EN : VOICE_EXTRA);
 
   const toolParts: Record<string, unknown>[] = [];
   let completed = false;
@@ -261,7 +275,7 @@ async function persistTurn(voice: VoiceContext, turn: VoiceTurn) {
   if (bErr) console.error("save voice blackboard failed", bErr);
 }
 
-async function authorizeVoice(token: unknown, sessionId: unknown): Promise<VoiceContext> {
+async function authorizeVoice(token: unknown, sessionId: unknown, mode: unknown): Promise<VoiceContext> {
   if (typeof token !== "string" || !token || typeof sessionId !== "string" || !sessionId) {
     throw new Error("请先登录后再使用语音陪伴");
   }
@@ -272,7 +286,7 @@ async function authorizeVoice(token: unknown, sessionId: unknown): Promise<Voice
   // RLS only returns the caller's own sessions.
   const { data: session } = await supabase.from("sessions").select("id,title,blackboard").eq("id", sessionId).maybeSingle();
   if (!session) throw new Error("会话不存在");
-  return { supabase, userId, sessionId, title: session.title, bbRef: { current: normalizeBlackboard(session.blackboard) } };
+  return { supabase, userId, sessionId, title: session.title, bbRef: { current: normalizeBlackboard(session.blackboard) }, mode: mode === "en" ? "en" : "zh" };
 }
 
 function* commentaryChunks(content: string) {
@@ -364,6 +378,7 @@ export function bindLiveConnection(
 
   function requestGreeting() {
     const content = (
+      (voice?.mode === "en" ? "Open now in simple English: greet the student warmly, ask in one short question what they are making today, then listen." : undefined) ??
       config.openingInstructions ??
       "现在用普通话开场：简短亲切地打个招呼，结合共享黑板里的作品问一句学生做到哪一步了（没有作品就问今天想做什么），然后安静聆听。"
     ).trim();
@@ -603,9 +618,9 @@ export function bindLiveConnection(
     }
   }
 
-  async function startSession(sdp: string, token: unknown, sessionId: unknown) {
+  async function startSession(sdp: string, token: unknown, sessionId: unknown, mode: unknown) {
     if (closing || browser.readyState !== 1) return;
-    voice = await authorizeVoice(token, sessionId);
+    voice = await authorizeVoice(token, sessionId, mode);
     if (closing || browser.readyState !== 1) return;
     clearTimeout(startTimer);
     startupTimer = setTimeout(() => {
@@ -637,7 +652,7 @@ export function bindLiveConnection(
         type: "session.start",
         session: {
           model: config.liveModel,
-          instructions: conversationInstructions(voice.bbRef.current),
+          instructions: conversationInstructions(voice.bbRef.current, voice.mode),
           audio: { output: { voice: "marin" } },
           delegation: { type: "client" },
         },
@@ -658,7 +673,7 @@ export function bindLiveConnection(
         }
         starting = true;
         execution.waitUntil(
-          startSession(event.sdp, event.token, event.sessionId).catch((error) => {
+          startSession(event.sdp, event.token, event.sessionId, event.mode).catch((error) => {
             if (!closing)
               emit({
                 type: "app.error",
