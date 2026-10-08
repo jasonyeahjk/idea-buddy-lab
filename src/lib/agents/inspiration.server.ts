@@ -23,10 +23,11 @@ export function runInspirationAgent(
   messages: ModelMessage[],
   bbRef: { current: Blackboard },
   signal: AbortSignal,
+  extraInstructions = "",
 ) {
   return streamText({
     model,
-    instructions: buildPrompt(bbRef.current),
+    instructions: buildPrompt(bbRef.current) + extraInstructions,
     messages,
     abortSignal: signal,
     stopWhen: stepCountIs(50),
