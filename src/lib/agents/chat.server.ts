@@ -24,7 +24,7 @@ import { routeIntent } from "./supervisor.server";
 const json = (status: number, error: string) =>
   new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
-function userClient(token: string) {
+export function userClient(token: string) {
   const url = process.env["SUPABASE_URL"]!;
   const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
   return createClient<Database>(url, key, {
