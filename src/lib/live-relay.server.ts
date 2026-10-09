@@ -255,7 +255,7 @@ async function answerQuestion(
 }
 
 /** Save plain voice chatter (no delegation) so every spoken turn becomes context. */
-async function persistTranscript(voice: VoiceContext, items: Transcript[]) {
+async function persistTranscript(voice: VoiceContext, items: Transcript[], config?: LiveConfig) {
   const runs: { role: "user" | "assistant"; text: string }[] = [];
   for (const t of items) {
     if (t.listeningSound || !t.text.trim()) continue;
@@ -270,8 +270,30 @@ async function persistTranscript(voice: VoiceContext, items: Transcript[]) {
     parts: [{ type: "data-voice", data: { mode: voice.mode } }, { type: "text", text: r.text.trim() }],
   })) as UIMessage[];
   if (!msgs.length) return;
+  if (voice.mode === "en" && config && runs.some((r) => r.role === "user")) {
+    await extractEvidence(voice, runs, config).catch((e) => console.error("voice evidence failed", e));
+  }
   const agent: AgentId = voice.mode === "en" ? "english" : "inspiration";
   await persistMessages(voice, msgs, agent);
+}
+
+/** After an English practice call, let the English agent record mastery evidence from the student's real words. */
+async function extractEvidence(voice: VoiceContext, runs: { role: "user" | "assistant"; text: string }[], config: LiveConfig) {
+  const provider = createOpenAI({
+    baseURL: gatewayAPIBase(config.baseURL),
+    apiKey: config.key,
+    headers: { "Lovable-API-Key": config.key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+  });
+  const transcript = runs.map((r) => `${r.role === "user" ? "学生" : "智伴"}：${r.text.trim()}`).join("\n");
+  const result = runEnglishAgent(
+    provider.responses(config.backendModel),
+    [{ role: "user", content: `以下是刚结束的英语口语练习语音记录：\n${transcript}` }],
+    voice.bbRef,
+    AbortSignal.timeout(60_000),
+    "\n\n【后台任务】只根据上面学生（不是智伴）说的英文原话，对达到证据标准的知识点调用一次 record_evidence（可同时估计 englishLevel），然后只回复“ok”。没有英文原话则直接回复“ok”。",
+  );
+  await result.consumeStream();
+  await result.text;
 }
 
 async function persistTurn(voice: VoiceContext, turn: VoiceTurn) {
