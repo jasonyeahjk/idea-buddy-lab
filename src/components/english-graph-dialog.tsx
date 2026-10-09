@@ -78,12 +78,12 @@ export function EnglishGraphDialog({ progress, level }: { progress: EnglishProgr
         </div>
         {sel ? (
           <div className="rounded-md border bg-card p-3 text-sm">
-            <p className="font-semibold">{sel.name} <span className="text-xs font-normal text-muted-foreground">{sel.level} · {STATE_LABEL[stateOf(sel.id)]}{progress[sel.id] ? ` · 证据 ${progress[sel.id].evidence} 条` : ""}</span></p>
+            <p className="font-semibold">{sel.name} <span className="text-xs font-normal text-muted-foreground">{sel.level} · {STATE_LABEL[stateOf(sel.id)]}{progress[sel.id] ? ` · 证据 ${progress[sel.id]!.evidence} 条` : ""}</span></p>
             <p className="mt-1"><b>掌握标准：</b>{sel.evidence}</p>
             {sel.prerequisites.length > 0 && (
               <p className="mt-1"><b>前置知识：</b>{sel.prerequisites.map((p) => `${TOPIC_BY_ID.get(p.id)?.name ?? p.id}（${p.strength === "hard" ? "必需" : "建议"}·${STATE_LABEL[stateOf(p.id)]}）`).join("；")}</p>
             )}
-            {!!progress[sel.id]?.notes.length && <p className="mt-1"><b>我的证据：</b>{progress[sel.id].notes.join("；")}</p>}
+            {!!progress[sel.id]?.notes.length && <p className="mt-1"><b>我的证据：</b>{progress[sel.id]!.notes.join("；")}</p>}
           </div>
         ) : <p className="text-xs text-muted-foreground">点击任一知识点查看掌握标准、前置依赖和你的证据。</p>}
       </DialogContent>
