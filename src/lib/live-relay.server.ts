@@ -464,7 +464,7 @@ export function bindLiveConnection(
     if (voice && transcripts.length > savedCursor) {
       const rest = transcripts.slice(savedCursor);
       savedCursor = transcripts.length;
-      execution.waitUntil(persistTranscript(voice, rest).catch((e) => console.error("save voice transcript failed", e)));
+      execution.waitUntil(persistTranscript(voice, rest, config).catch((e) => console.error("save voice transcript failed", e)));
     }
     clearTimeout(startTimer);
     clearTimeout(startupTimer);
