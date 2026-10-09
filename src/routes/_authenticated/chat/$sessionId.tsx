@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 import { DiagramCard } from "@/components/diagram-card";
 import { VoiceCompanion } from "@/components/voice-companion";
+import { EnglishGraphDialog } from "@/components/english-graph-dialog";
 import { VocabCards, speak } from "@/components/vocab-cards";
 import { ENGLISH_TOPICS, nextRecommended } from "@/lib/agents/english-taxonomy";
 import type { VocabCard } from "@/lib/agents/blackboard";
@@ -201,6 +202,17 @@ function ChatWindow({ sidebar, sessionId, initialMessages, initialBlackboard }: 
   });
 
   const busy = status === "submitted" || status === "streaming";
+  async function refreshFromServer() {
+    const [{ data: s }, { data: m }] = await Promise.all([
+      supabase.from("sessions").select("blackboard").eq("id", sessionId).single(),
+      supabase.from("messages").select("ui_id,role,parts,agent").eq("session_id", sessionId).order("created_at"),
+    ]);
+    if (s) setBb(normalizeBlackboard(s.blackboard));
+    if (m && status === "ready") {
+      setMessages(m.map((r) => ({ id: r.ui_id, role: r.role as UIMessage["role"], parts: r.parts as UIMessage["parts"], metadata: { agent: r.agent } })));
+    }
+    qc.invalidateQueries({ queryKey: ["session", sessionId] });
+  }
   useEffect(() => {
     if (!busy) document.querySelector<HTMLTextAreaElement>("textarea")?.focus();
   }, [busy]);
@@ -261,6 +273,13 @@ function ChatWindow({ sidebar, sessionId, initialMessages, initialBlackboard }: 
               if (e["blackboard"]) setBb(normalizeBlackboard(e["blackboard"]));
               qc.invalidateQueries({ queryKey: ["sessions"] });
             }}
+            onEnded={(mode) => {
+              // The server saves the call (and English evidence) after hang-up; poll a few times.
+              const delays = mode === "en" ? [3000, 8000, 15000, 30000] : [3000, 10000];
+              delays.forEach((d) => setTimeout(() => void refreshFromServer(), d));
+            }}
+            onAnalyze={() => { if (!busy) sendMessage({ text: "分析一下我的英语水平" }); }}
+            analyzing={busy}
           />
           <PromptInput
             onSubmit={({ text }) => {
@@ -432,7 +451,7 @@ function EnglishPanel({ bb }: { bb: Blackboard }) {
         )}
       </div>
       <div className="mt-4">
-        <h3 className="mb-1 flex items-center gap-1 text-sm font-semibold"><GraduationCap className="h-4 w-4 text-primary" />英语进度{bb.englishLevel && <span className="ml-1 rounded bg-secondary px-1.5 text-xs text-secondary-foreground">{bb.englishLevel}</span>}</h3>
+        <h3 className="mb-1 flex items-center gap-1 text-sm font-semibold"><GraduationCap className="h-4 w-4 text-primary" />英语进度{bb.englishLevel && <span className="ml-1 rounded bg-secondary px-1.5 text-xs text-secondary-foreground">{bb.englishLevel}</span>}<span className="ml-auto"><EnglishGraphDialog progress={progress} level={bb.englishLevel ?? null} /></span></h3>
         {entries.length === 0 ? <p className="text-xs text-muted-foreground">暂无学习证据</p> : (
           <ul className="space-y-0.5 text-sm">
             {entries.map(([id, p]) => (
