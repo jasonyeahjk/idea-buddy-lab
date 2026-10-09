@@ -254,8 +254,33 @@ async function answerQuestion(
   return answer;
 }
 
+/** Save plain voice chatter (no delegation) so every spoken turn becomes context. */
+async function persistTranscript(voice: VoiceContext, items: Transcript[]) {
+  const runs: { role: "user" | "assistant"; text: string }[] = [];
+  for (const t of items) {
+    if (t.listeningSound || !t.text.trim()) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.role === t.role) last.text += t.text;
+    else runs.push({ role: t.role, text: t.text });
+  }
+  const msgs = runs.filter((r) => r.text.trim()).map((r) => ({
+    id: generateId(),
+    role: r.role,
+    metadata: r.role === "assistant" ? { agent: voice.mode === "en" ? "english" : "inspiration" } : undefined,
+    parts: [{ type: "data-voice", data: { mode: voice.mode } }, { type: "text", text: r.text.trim() }],
+  })) as UIMessage[];
+  if (!msgs.length) return;
+  const agent: AgentId = voice.mode === "en" ? "english" : "inspiration";
+  await persistMessages(voice, msgs, agent);
+}
+
 async function persistTurn(voice: VoiceContext, turn: VoiceTurn) {
-  const rows = [turn.user, turn.assistant].map((m) => ({
+  await persistMessages(voice, [turn.user, turn.assistant], turn.agent);
+}
+
+async function persistMessages(voice: VoiceContext, msgs: UIMessage[], agentId: AgentId) {
+  const turn = { agent: agentId };
+  const rows = msgs.map((m) => ({
     session_id: voice.sessionId,
     user_id: voice.userId,
     ui_id: m.id,
@@ -265,7 +290,7 @@ async function persistTurn(voice: VoiceContext, turn: VoiceTurn) {
   }));
   const { error } = await voice.supabase.from("messages").insert(rows);
   if (error) console.error("save voice messages failed", error);
-  const firstText = turn.user.parts.find((p) => p.type === "text") as { text: string } | undefined;
+  const firstText = msgs.find((m) => m.role === "user")?.parts.find((p) => p.type === "text") as { text: string } | undefined;
   const title = voice.title === "新的创作" && firstText ? firstText.text.slice(0, 24) : voice.title;
   voice.title = title;
   const { error: bErr } = await voice.supabase
@@ -351,6 +376,7 @@ export function bindLiveConnection(
     stop();
   }, 5000);
   const transcripts: Transcript[] = [];
+  let savedCursor = 0;
   const delegations = new Set<string>();
 
   function emit(event: object) {
@@ -413,6 +439,11 @@ export function bindLiveConnection(
   function finish() {
     if (finished) return;
     finished = closing = true;
+    if (voice && transcripts.length > savedCursor) {
+      const rest = transcripts.slice(savedCursor);
+      savedCursor = transcripts.length;
+      execution.waitUntil(persistTranscript(voice, rest).catch((e) => console.error("save voice transcript failed", e)));
+    }
     clearTimeout(startTimer);
     clearTimeout(startupTimer);
     clearTimeout(closeTimer);
@@ -472,6 +503,7 @@ export function bindLiveConnection(
       if (plan && voice) {
         const ctx = voice;
         execution.waitUntil(persistTurn(ctx, plan));
+        savedCursor = transcripts.length;
         emit({ type: "app.voice.turn", delegation_id: delegationID, turn: plan, blackboard: ctx.bbRef.current });
       }
       completedDelegation = pendingDelegations.shift();
