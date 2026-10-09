@@ -85,3 +85,11 @@ describe("normalizeBlackboard", () => {
     expect(bb.vocab).toEqual([]);
   });
 });
+
+describe("english analysis", () => {
+  it("keeps the latest analysis and preserves it when patch omits it", () => {
+    const a = { summary: "s", cefr: "A1", sampleCount: 3, strengths: [], issues: [], suggestions: [], updatedAt: "" };
+    const b = applyPatch(applyPatch(emptyBlackboard(), { englishAnalysis: a }), { materials: ["x"] });
+    expect(b.englishAnalysis?.cefr).toBe("A1");
+  });
+});

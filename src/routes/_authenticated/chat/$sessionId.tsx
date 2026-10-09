@@ -314,6 +314,10 @@ function ChatMessage({ message }: { message: UIMessage }) {
             const tp = p as { input?: { cards?: VocabCard[] }; state?: string };
             return tp.state === "input-streaming" || !tp.input?.cards ? <Shimmer key={i} className="text-sm">正在制作词汇卡…</Shimmer> : <VocabCards key={i} cards={tp.input.cards} />;
           }
+          if (p.type === "tool-analyze_english") {
+            const tp = p as { input?: AnalysisInput; state?: string };
+            return tp.state === "input-streaming" || !tp.input?.summary ? <Shimmer key={i} className="text-sm">正在诊断英语能力…</Shimmer> : <EnglishDiagnosticCard key={i} a={tp.input} />;
+          }
           if (p.type === "tool-record_evidence")
             return (
               <Tool key={i} defaultOpen={false}>
@@ -324,7 +328,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
                 </ToolContent>
               </Tool>
             );
-          if (p.type === "data-voice" && message.role === "user") return <span key={i} className="text-xs opacity-80">🎙 语音</span>;
+          if (p.type === "data-voice" && message.role === "user") return <span key={i} className="text-xs opacity-80">{(p as { data?: { mode?: string } }).data?.mode === "en" ? "🎙 英语口语练习" : "🎙 语音"}</span>;
           if (p.type === "tool-update_blackboard")
             return (
               <Tool key={i} defaultOpen={false}>
@@ -438,6 +442,39 @@ function EnglishPanel({ bb }: { bb: Blackboard }) {
         )}
         <p className="mt-2 text-xs text-muted-foreground">推荐下一个：{next.map((t) => t.name).join("、") || "—"}</p>
       </div>
+      {bb.englishAnalysis && (
+        <div className="mt-4">
+          <h3 className="mb-1 text-sm font-semibold">英语能力诊断 <span className="text-xs font-normal text-muted-foreground">{bb.englishAnalysis.cefr} · {bb.englishAnalysis.sampleCount} 句样本</span></h3>
+          <p className="text-xs">{bb.englishAnalysis.summary}</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs">
+            {bb.englishAnalysis.suggestions.map((s) => <li key={s.topicId}><b>{name(s.topicId)}</b>：{s.advice}</li>)}
+          </ul>
+        </div>
+      )}
     </>
+  );
+}
+
+type AnalysisInput = {
+  englishLevel?: string; cefr?: string; summary?: string; sampleCount?: number;
+  strengths?: string[]; issues?: { said: string; better: string; topicId: string }[];
+  suggestions?: { topicId: string; advice: string }[];
+};
+
+function EnglishDiagnosticCard({ a }: { a: AnalysisInput }) {
+  const name = (id: string) => ENGLISH_TOPICS.find((t) => t.id === id)?.name ?? id;
+  return (
+    <div className="my-2 rounded-lg border border-border bg-card p-3 text-sm">
+      <div className="mb-1 flex items-center gap-2 font-semibold"><GraduationCap className="h-4 w-4 text-primary" />英语能力诊断
+        <span className="rounded bg-secondary px-1.5 text-xs text-secondary-foreground">{a.englishLevel} · {a.cefr}</span>
+        <span className="text-xs font-normal text-muted-foreground">{a.sampleCount ?? 0} 句样本</span>
+      </div>
+      <p className="text-muted-foreground">{a.summary}</p>
+      {!!a.strengths?.length && <><p className="mt-2 font-medium">优势</p><ul className="list-disc pl-5">{a.strengths.map((s) => <li key={s}>{s}</li>)}</ul></>}
+      {!!a.issues?.length && <><p className="mt-2 font-medium">表达改进</p><ul className="space-y-1">{a.issues.map((x, k) => (
+        <li key={k} className="text-xs"><span className="line-through opacity-70">{x.said}</span> → <span className="text-primary">{x.better}</span> <span className="text-muted-foreground">（{name(x.topicId)}）</span></li>
+      ))}</ul></>}
+      {!!a.suggestions?.length && <><p className="mt-2 font-medium">按知识图谱的提升建议</p><ol className="list-decimal pl-5">{a.suggestions.map((x) => <li key={x.topicId}><b>{name(x.topicId)}</b>：{x.advice}</li>)}</ol></>}
+    </div>
   );
 }
