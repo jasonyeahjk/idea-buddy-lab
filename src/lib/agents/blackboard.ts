@@ -6,6 +6,16 @@ import { recordEvidence, type EnglishProgress, type Level } from "./english-taxo
 export type AgentId = "supervisor" | "inspiration" | "creation" | "evaluation" | "english";
 export type Intent = "inspiration" | "creation" | "evaluation" | "english" | "general";
 
+export interface EnglishAnalysis {
+  summary: string;
+  cefr: string; // e.g. Pre-A1 / A1 / A2 / B1
+  sampleCount: number;
+  strengths: string[];
+  issues: { said: string; better: string; topicId: string }[];
+  suggestions: { topicId: string; advice: string }[];
+  updatedAt: string;
+}
+
 export interface VocabCard { word: string; phonetic: string; meaning: string; example: string }
 
 export const AGENT_LABELS: Record<AgentId, string> = {
@@ -52,6 +62,7 @@ export interface Blackboard {
   englishLevel: Level | null;
   vocab: VocabCard[];
   englishProgress: EnglishProgress;
+  englishAnalysis: EnglishAnalysis | null;
   routeLog: RouteRecord[];
 }
 
@@ -73,6 +84,7 @@ export const emptyBlackboard = (): Blackboard => ({
   englishLevel: null,
   vocab: [],
   englishProgress: {},
+  englishAnalysis: null,
   routeLog: [],
 });
 
@@ -109,6 +121,7 @@ export interface BlackboardPatch {
   englishLevel?: Level | null;
   vocab?: VocabCard[];
   englishEvidence?: { topicId: string; note: string }[];
+  englishAnalysis?: EnglishAnalysis | null;
 }
 
 /** Merge a patch: scalar fields overwrite when provided, list fields append + dedupe. */
@@ -131,6 +144,7 @@ export function applyPatch(bb: Blackboard, p: BlackboardPatch): Blackboard {
     diagrams: uniq(bb.diagrams, p.diagrams, 8),
     englishLevel: p.englishLevel ?? bb.englishLevel,
     vocab: mergeVocab(bb.vocab, p.vocab),
+    englishAnalysis: p.englishAnalysis ?? bb.englishAnalysis,
     englishProgress: p.englishEvidence?.length ? recordEvidence(bb.englishProgress, p.englishEvidence) : bb.englishProgress,
   };
 }

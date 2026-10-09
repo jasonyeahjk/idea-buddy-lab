@@ -104,7 +104,20 @@ export async function handleChat(request: Request): Promise<Response> {
       const runners = { inspiration: runInspirationAgent, creation: runCreationAgent, evaluation: runEvaluationAgent, english: runEnglishAgent } as const;
       const runner = decision.agent !== "supervisor" && AGENT_READY[decision.agent] ? runners[decision.agent] : null;
       if (runner) {
-        const result = runner(model, await convertToModelMessages(messages), bbRef, request.signal);
+        let extra = "";
+        if (decision.agent === "english") {
+          // Voice turns live only in the database; give the English agent every spoken + typed student line.
+          const { data: rows } = await supabase.from("messages").select("parts").eq("session_id", sessionId).eq("role", "user").order("created_at", { ascending: true }).limit(200);
+          const lines = (rows ?? []).map((r) => {
+            const parts = (r.parts ?? []) as { type: string; text?: string }[];
+            const t = parts.filter((x) => x.type === "text").map((x) => x.text).join("").trim();
+            return t ? `${parts.some((x) => x.type === "data-voice") ? "🎙" : "⌨"} ${t}` : "";
+          }).filter(Boolean).slice(-80);
+          if (lines.length) extra = `\n\n本会话学生全部原话（🎙=语音，⌨=文字），用于能力诊断：\n${lines.join("\n")}`;
+        }
+        const result = decision.agent === "english"
+          ? runEnglishAgent(model, await convertToModelMessages(messages), bbRef, request.signal, extra)
+          : runner(model, await convertToModelMessages(messages), bbRef, request.signal);
         writer.merge(result.toUIMessageStream({ sendStart: false, sendReasoning: true, onError: friendlyError }));
         await result.steps;
       } else {
