@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { Mic, PhoneOff, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Mic, PhoneOff, Loader2, Sparkles } from "lucide-react";
 import { useLiveVoice, type LiveEvent } from "@/hooks/use-live-voice";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
 type Caption = { role: "user" | "assistant"; text: string };
 
-export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTurn: (event: LiveEvent) => void }) {
+export function VoiceCompanion({ sessionId, onTurn, onEnded, onAnalyze, analyzing }: { sessionId: string; onTurn: (event: LiveEvent) => void; onEnded?: (mode: "zh" | "en") => void; onAnalyze?: () => void; analyzing?: boolean }) {
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [mode, setMode] = useState<"zh" | "en">("zh");
   const voice = useLiveVoice({
@@ -28,7 +28,12 @@ export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTur
     },
   });
 
+  const wasActive = useRef(false);
   const active = voice.status === "connecting" || voice.status === "connected" || voice.status === "stopping";
+  useEffect(() => {
+    if (wasActive.current && !active) onEnded?.(mode);
+    wasActive.current = active;
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
   const label =
     voice.status === "connecting" ? "正在接通…" :
     voice.status === "stopping" ? "正在结束…" :
@@ -37,7 +42,7 @@ export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTur
   return (
     <div className="mb-2">
       <audio ref={voice.audioRef} autoPlay hidden />
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {active ? (
           <Button size="sm" variant="destructive" onClick={voice.stop}><PhoneOff className="mr-1 h-4 w-4" />结束语音</Button>
         ) : (
@@ -51,6 +56,9 @@ export function VoiceCompanion({ sessionId, onTurn }: { sessionId: string; onTur
               </button>
             ))}
           </div>
+        )}
+        {!active && onAnalyze && (
+          <Button size="sm" variant="outline" onClick={onAnalyze} disabled={analyzing}><Sparkles className="mr-1 h-4 w-4" />分析我的英语水平</Button>
         )}
         {active && <span className="flex items-center gap-1 text-xs text-muted-foreground">{voice.status === "connecting" && <Loader2 className="h-3 w-3 animate-spin" />}{label}</span>}
         {voice.playbackBlocked && <Button size="sm" variant="ghost" onClick={voice.resumePlayback}>点此播放声音</Button>}
